@@ -1,0 +1,70 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract NFTArtMarketplace is ERC721, Ownable {
+    using SafeMath for uint256;
+
+    // Struct to represent an art piece
+    struct ArtPiece {
+        uint256 tokenId;
+        address payable owner;
+        uint256 price;
+        bool forSale;
+        bool isAuction;
+    }
+
+    // Mapping from token ID to ArtPiece
+    mapping(uint256 => ArtPiece) public artPieces;
+
+    // Events
+    event ArtPieceAdded(uint256 indexed tokenId, uint256 price, bool isAuction);
+    event ArtPieceSold(uint256 indexed tokenId, address indexed buyer, uint256 price);
+    event ArtPieceRemoved(uint256 indexed tokenId);
+
+    // Constructor
+    constructor(string memory _name, string memory _symbol) ERC721(_name, _symbol) {}
+
+    // Add new art piece
+    function addArtPiece(uint256 tokenId, uint256 price, bool isAuction) external {
+        require(!_exists(tokenId), "Token ID already exists");
+        _mint(msg.sender, tokenId);
+        artPieces[tokenId] = ArtPiece(tokenId, payable(msg.sender), price, true, isAuction);
+        emit ArtPieceAdded(tokenId, price, isAuction);
+    }
+
+    // Remove art piece
+    function removeArtPiece(uint256 tokenId) external {
+        require(ownerOf(tokenId) == msg.sender, "Only the owner can remove the art piece");
+        _burn(tokenId);
+        delete artPieces[tokenId];
+        emit ArtPieceRemoved(tokenId);
+    }
+
+    // Buy art piece
+    function buyArtPiece(uint256 tokenId) external payable {
+        ArtPiece storage artPiece = artPieces[tokenId];
+        require(artPiece.forSale, "Art piece not for sale");
+        require(msg.value >= artPiece.price, "Insufficient funds");
+
+        artPiece.owner.transfer(artPiece.price);
+        _transfer(artPiece.owner, msg.sender, tokenId);
+
+        artPiece.forSale = false;
+        emit ArtPieceSold(tokenId, msg.sender, artPiece.price);
+    }
+
+    // Get all art pieces
+    function getAllArtPieces() external view returns (ArtPiece[] memory) {
+        uint256 totalArtPieces = totalSupply();
+        ArtPiece[] memory artPiecesArray = new ArtPiece[](totalArtPieces);
+        for (uint256 i = 0; i < totalArtPieces; i++) {
+            uint256 tokenId = tokenByIndex(i);
+            artPiecesArray[i] = artPieces[tokenId];
+        }
+        return artPiecesArray;
+    }
+}
